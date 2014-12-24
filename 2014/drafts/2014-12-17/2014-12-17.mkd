@@ -1,0 +1,297 @@
+Title:    Silki 분석
+Package:  Seoul.pm
+Category: perl
+Category: Seoul.pm
+Author:   yongbin
+
+저자
+-----
+
+[@y0ngbin][twitter-yongbin] - 광진구 Mr. 동물사랑
+
+시작하며
+---------
+
+ 구슬이 서 말이라도 꿰어야 보배입니다. CPAN에 있는 많은 모듈들도 잘 조합해서
+자신이 원하는 결과를 만들어낼때 더 가치가 있습니다. 하지만 문제는, 저 처럼
+경험이 별로 없는 사람은 구슬을 아무리 많이 줘도 당췌 어떻게 꿰어야 할지 쉽게
+감을 잡을수가 없다는 점입니다. 이럴때는 막막하게 손에 쥔 구슬들만 바라보고
+있는것 보다는 누군가 이미 잘 꿰어놓은 보배들을 요모조모 잘 살피는것이 가장
+효과적입니다.
+
+Silki는 객체지향방법으로 CPAN에 있는 많은 모듈들을 효과적으로 잘 꿰는 방법을
+설명한 좋은 모듈입니다.
+
+Silki는 DateTime 으로 우리에게 유명한 Dave Rolsky가 2010년에 작성한 카탈리스트
+기반의 위키 플랫폼입니다.(현재 <http://datetime.perl.org> 가 Silki로 운영중입니다)
+PostgreSQL DB를 사용하고 [Fey::ORM][cpan-fey-orm],
+[Markdent][cpan-markdent], [Data::Localize::Gettext][cpan-data-localize-gettext]등을 사용합니다. 저자는 DB
+기반의 크고 복잡한 웹 응용 프로그램을 객체지향적인 방법으로 어떻게 명쾌하고
+우아하게 작성할수 있는지를 잘 보여주고 있습니다. Silki의 최신버전은 0.29이며
+[CPAN을 통해서 받을수 있습니다][silki-cpan]. 과거 버전은 [저장소][silki-repo]를
+통해 내려받을수 있습니다.
+
+ 개인적으로 얼마전 부터 주말 등 짬이나는 시간에 Silki 코드를 읽어보고 있었는데,
+11월 부터는 성탄일 달력을 염두해서 본격적으로 Silki 저장소의 0.01 버전을
+백지에서 부터 옮기면서 분석하는 시작했습니다. 작업은 2가지의 목표하에 진행했습니다. 
+첫째. Silki 0.01의 모든 테스트를 만족하는 최소한의 코드를 작성할 것, 둘째.
+읽는사람이 이해하기 좋도록 옮긴내용을 잘 정리할것. 그렇게 해서 탄생하게 된것이
+바로 [Milki][github-milki] 입니다.
+
+준비물
+-------
+
+Milki를 살펴보기 위해서는 가장 먼저 위의 저장소를 내려받아야 합니다.
+
+	$ git clone https://github.com/yongbin/Milki.git
+
+Milki가 postgresql을 기반으로하는 웹 응용프로그램이기떄문에 테스트를
+통과하는데도 꽤 많은 의존성이 필요합니다.
+
+먼저 OS에는 당연히 postgresql이 설치되어있어야 되어야 합니다. 그리고 Milki에서는
+pg의 표준 자료형 이외에 내부적인 대소문자 구분을 없에서 영문의 텍스트 검색을
+용이하게 한 David E. Wheeler의 [citext][pg-citext] 자료형을 사용하기 때문에
+contrib에 해당하는 패키지도 설치해 주어야 합니다.
+
+    sudo apt-get install postgresql postgresql-contrib 
+
+설치 이후 'postgrs' 계정을 통해 psql 에 접속한 뒤 응용 프로그램에 사용할 사용자
+DB 계정을 아래와 같이 생성할 필요가 있습니다.
+
+	CREATE USER milki WITH PASSWORD 'milki' SUPERUSER;
+
+여기까지 진행되고 나면, 아래 명령등을 통해 접속이 가능한지 테스트 해 볼 수
+있습니다.
+
+	$ PGHOST=127.0.0.1 PGDATABASE=template1 PGUSER=milki PGPASSWORD=milki psql
+
+Milki는 첨부파일을 파이시스템에 저장하지 않고 blob 형태로 내부 테이블에 저장하며
+저장하는 과정에 이미지인 경우 자동으로 썸네일 생성을 하는 기능이
+포함되어있습니다. 해당 기능을 구현하기 위해서는 [Image::Magick][cpan-imagemagick] 모듈이 설치되어
+있어야 합니다. Image::Magick은 XS 모듈로 imagemagick 해더와 라이브러리를
+참조하기 때웨 아래와 같은 패키지도 설치해야 합니다.
+
+    sudo apt-get install imagemagick libmagickcore-dev libperl-dev
+
+Milki는 상당히 많으 모듈을 의존하고 있기때문에, 여기에 일일이 해당 모듈을
+나열하기는 어렵습니다. 최소 의존 모듈의 목록과 버전은
+[cpanfile][github-cpanfile]에 정리해 두었기 때문에 아래 명령을 통해서 의존성이
+있는 모듈들을 한번에 설치하면 됩니다.
+
+    $ cpanm --installdeps . 
+
+Silki
+-------
+
+여기까지 진행되었다면 이제 좋아하는 편집기로 소스코드를 동작시키면서 Silki의
+내부구조를 알아갈 수 있습니다.
+
+    $ git log --oneline --decorate --graph
+    $ git log --reverse
+
+현재 Silki는 최신버전 조차도 작성된지 시간이 꽤 흘렀기 때문에 최신의 CPAN
+환경에서는 기동하거나 테스트를 할 수 없는 상태였습니다. Silki를 Milki로 옮겨적는
+동안 여러가지 시행착오들을 통해서 문제점들을 찾아냈고 기존 코드를 최소한으로
+수정하는 수정해서 문제를 해결했습니다. 결과적으로 현재시점의 Milki는 Silki에
+있는 20개 파일의 388개 테스트 모두를 성공적으로 다 통과합니다.
+
+아래 명령을 통해 Silki 0.01의 모든 테스트를 실행할수도 있습니다.
+
+	$ LANG=en_US.UTF-8 PGHOST=127.0.0.1 PGUSER=milki PGPASSWORD=milki prove -lr
+
+    ./t/Milki/Config.t ....................... ok    
+    ./t/Milki/Email.t ........................ ok    
+    ./t/Milki/Formatter/HTMLToWiki.t ......... ok   
+    ./t/Milki/Formatter/HTMLToWiki/Table.t ... ok   
+    ./t/Milki/HTML/FormatText.t .............. ok   
+    ./t/Milki/I18N.t ......................... ok   
+    ./t/Milki/Localize/Format/Gettext.t ...... ok    
+    ./t/Milki/Markdent/Dialect/Milki.t ....... ok   
+    ./t/Milki/Markdent/Handler/HTMLStream.t .. ok    
+    ./t/Milki/Schema.t ....................... ok   
+    ./t/Milki/Schema/Domain.t ................ ok   
+    ./t/Milki/Schema/File.t .................. ok    
+    ./t/Milki/Schema/Page-title-uri.t ........ ok    
+    ./t/Milki/Schema/Page.t .................. ok    
+    ./t/Milki/Schema/PageRevision.t .......... ok   
+    ./t/Milki/Schema/User-best-name.t ........ ok   
+    ./t/Milki/Schema/User-email.t ............ ok    
+    ./t/Milki/Schema/User.t .................. ok    
+    ./t/Milki/Schema/Wiki.t .................. ok    
+    ./t/Milki/Util.t ......................... ok   
+    All tests successful.
+    Files=20, Tests=388, 81 wallclock secs ( 0.18 usr  0.06 sys + 71.10 cusr  3.17 csys = 74.51 CPU)
+    Result: PASS
+
+Silki의 내부구조나 구현방식에 대한 자세한 내용은 지면에 한계가 있기 때문에
+Milki의 커밋로그와 동작하는 테스트를 활용해서 확인해 보시기 바랍니다. 다만
+개인적으로 분석하면서 가장 인상적이었던 구슬들을 간략하게 소개하도록 하겠습니다.
+
+Fey::ORM
+---------
+
+Silki는 Fey::ORM을 아주 진지하게 쓰는 응용프로그램입니다. 위키
+응용프로그램이라면 당연히 있을것이라고 생각되는 대부분의 테이블이
+[Milki::Schema 하부][github-milki-schema]에 표현되어있습니다. Fey::ORM을 테이블
+자체에 접근은 [MooseX::ClassAttribute][cpan-mx-classattrib]를 활용해서 처리하고
+그 밖에 엔티티에 동작에 대해서는 일반적인 Moose 모듈을 만들어나가듯이 코드를
+확장할 수 있습니다. 게다가 Fey::ORM은 Fey를 활용한 SQL문법을 지원하기때문에
+SQL문을 전혀 작성하지 않고, 동시에 SQL의 표현력을 해치지 않는 방식으로 DB를
+사용할 수 있습니다.
+
+- 전반적으로 Silki를 위해 사용된 PostgreSQL의 DB는 잘 설계된 DB 구조를 가지고
+  있으며, 내장 프로시저, 확장 자료형, 트리거등을 활용한 예로서 참고할 만 합니다. [schema.sql][github-schema]
+- Fey::SQL로 작성된 가장 복잡한 SQL-like 객체는 [Wiki.pm의 text_search 함수][github-wiki-969]에서
+  확인할 수 있습니다.
+- Silki::Schema::Page는  최신버전의 변경이 있을때마다 PageRevision
+  테이블에 해당내용을 갱신하는 구조로 되어있습니다. Fey::ORM으로 작성된 객체간의
+  유기적인 관계와 텍스트의 블럭단위 비교방법을 참고하기 좋은 예제입니다. [테스트][github-test-pagerevision], [코드][github-schema-pagerevision]
+
+MooseX::Parameterized
+-----------------------
+
+[MooseX::Parameterized][cpan-mx-para]는 Shawn M Moore가 작성한 Moose의 확장 모듈입니다.
+MX::Parameterized는 일반적으로 클레스가 소비(Consum)하는 Role을 매게변수를
+받을수 있도록 확장하고, 매게변수를 통해 Role을 동적으로 생성할 수 있도록
+도와주는 모듈입니다.
+
+Milki에서 MX::Parameterized는 [Milki::Role::Schema::DataValidator][github-mrs-datavalidator],
+[Milki::Role::Schema::SystemLogger][github-mrs-systemlogger]에서 사용되었는데, 두 Role 모두 다
+Milki::Schema 하부 모듈들에 의해서 다양한 형태로 호출이 됩니다.
+MX::Parameterized를 사용하면, 클레스는 소비하는 시점에 동적으로 생성한 코드를
+클레스에 주입할 있고, around나 after 같은 Moose 조정자를 통해 기존 객체의 동작을
+조작할 수 있습니다.
+
+예를 들면, Milki::Role::Schema::SystemLogger는 'methods' 를 Role의 인자로 받습니다.
+'methods'에 전달한 각각의 인자는 '\_system\_log\_values\_for\_XXX' 형태의
+함수를 구현해야 합니다. 즉 Milki::Schema::File을 예로들면 아래와 같이
+SystemLogger를 소비합니다.
+
+    with 'Milki::Role::Schema::SystemLogger' => { methods => ['delete'] };
+
+위와 같이 테이블에서 Fey::Table이 가지고 있는 기본함수인
+'delete' (테이블에서 해당 객체를 삭제하는 함수)를 지정하면 아래와 같이
+\_system\_log\_values\_for\_delete를 구현해야합니다. File에서 아래와 같이 로깅을 위한
+정보를 넘겨주도록 작성하면,
+
+     sub _system_log_values_for_delete {
+         my $self = shift;
+    
+         my $msg
+             = 'Deleted file, '
+             . $self-    filename()
+             . ', in wiki '
+             . $self-    wiki()-    title();
+    
+         return (
+             wiki_id   =     $self-    wiki_id(),
+             message   =     $msg,
+             data_blob =     {
+                 filename  =     $self-    filename(),
+                 mime_type =     $self-    mime_type(),
+                 file_size =     $self-    file_size(),
+             },
+         );
+     }
+
+실제 'delete' 명령이 호출되는 시점에 Moose의 'aound' 명령을 통해서
+M::R::S::SystemLogger의 wrapper 함수로 전달되고 wrapper 함수는 기본적인
+User 처리 이후 \_system\_log\_values\_for\_delete()을 호출한 결과를 전달하고
+그 결과를 DB transaction에 담아서 실행시킵니다. ( 이 과정에서 data_blob
+에 전달된 값들은 transform을 이용해서 nfreeze 되어 직렬화 된 뒤 저장됩니다)
+
+개인적으로 이번에 Silki를 분석하면서 가장 우아하다고 생각했던 부분입니다.
+
+- MX::Parameterized의 디자인에 대한 자세한 내용은 [튜토리얼 문서][cpan-mx-parap-doc]에 잘
+설명되어있습니다.
+- MX::Parameterized를 사용한 또다른 예제는 Milki::Role::Schema::DataValidator에
+구현되어있는데 [커밋로그][github-commit-3c2dad]에 내용을 정리해 두었습니다.
+
+Markdent
+---------
+
+ Markdent는 Dave Rolesky가 만든 Markdown을 위한 이벤트 기반의 파서 도구
+모음입니다. 저자의 설명에 따르면 Markdent는 기존 Markdown 도구들이 파서와
+(HTML)변환기가 합쳐져 있는 상태로 구현된 경우가 많기때문에, Markdown 자체를
+확장하기가 어려운데 Markdent는 SAX와 유사한 이벤트 기반의 파서형태로 Markdown
+처리와 문법을 분리해서 좀 더 유연하고 확장가능한 형태로 만든 도구입니다.
+
+ Markdent는 방언(Dialect) 이라는 이름으로 Markdown 문법(그리고 문법에
+대한 파서)를 정의합니다. John Gruber가 최초로 만들어 공개한 Markdown
+문법은 [Markdent::Dialect::Standard][mkdent-standard], David Wheeler가 제안한 확장을 구현한
+문법을 [Markdent::Dialect::Theory][mkdent-theory], Github 서비스에서 제공하는 GitHub
+Flavored Markdown 문법을 [Markdent::Dialect::GitHub][mkdent-github]으로 제공하는
+식입니다.
+
+각각의 Dialect은 BlockParser와 SpanParser로 구성되어있는데,
+BlockParser는 목록, 문단, 인용구 같은 덩어리를 나누는 문법이며 그 결과를
+SpanParser로 전달합니다. SpanParser는 강조, 링크와 같은 세부 문법을
+다루는 문법입니다.
+
+그리고 Markdent는 Dialect이 가진 Parser는 Parse를 한 시점에 그 결과를
+Hander에게 전달하는 방식으로 동작합니다.
+
+즉 도식으로 정리하면 다음과 같습니다.
+
+    		   Parser	--(event)--     Handler
+    	  	     /\
+    		    /  \
+    		   /    \
+    		  /      \
+			 /        \ 
+    	    Block -> Span
+
+Milki는 Markdent::Dialect::Milki라는 별도의 방언을 만들고 이 방언을
+처리하기 위한 [BlockParser][github-mk-bp]와 [SpanParser][github-mk-sp]를 구현합니다. 이 파서들은
+기본적으로 Markdent::Dialect::Theory 상속해서 구현하는데, BlockParser는
+완전히 동일하게 동작하며, SpanParser에서는 위키 페이지에 대한
+링크와,파일링크, 이미지 링크에 대한 Milki 자체의 문법을 정의해서 Markdown 문법의
+일부처럼 확장합니다. SpanParser에서 정규식으로 정의된 확장문법은 이벤트 형태로
+각각 [Markdent::Event::FileLink][github-mk-e-f], [Markdent::Event::ImageLink][github-mk-e-i],
+[Markdent::Event::WikiLink][github-mk-e-wl]로 전달되며 각각에서 구현됩니다.
+
+정리하며
+---------
+
+그동안 Silki 소스의 분석을 진행하면서 개인적으로 정말 많은것들을 배울 수
+있었습니다. 이 기사를 보는 여러분들도 Milki를 통해서 조금이나마 아이디어를 얻을
+수 있는 기회가 되기를 바랍니다.
+
+개인적으로 계속 Silki 코드를 분석하는 작업을 계속 진행할 예정입니다. 관심있는
+분들은 github 이슈나, #perl-kr 채널을 통해서 문의해 주시기 바랍니다.
+
+끝으로 열성적으로 Silki를 작성하고 분석하면서 생긴 의문점과 요청들을 항상 열심히
+답해준 Dave Rolsky에게 감사의 말을 전하고 싶습니다.
+
+메리크리스마스!
+
+[markdent-doc]:                    http://search.cpan.org/~drolsky/Markdent-0.24/lib/Markdent/Manual.pod
+[twitter-yongbin]:                 http://twitter.com/#!/y0ngbin
+[github-commit-3c2dad]:            https://github.com/yongbin/Milki/commit/3c2dad7ff76932da2f1f675791b455929c7ada95
+[cpan-fey-orm]:                    https://metacpan.org/pod/Fey::ORM
+[cpan-markdent]:                   https://metacpan.org/pod/Markdent
+[cpan-data-localize-gettext]:      https://metacpan.org/pod/Data::Localize::Gettext
+[cpan-silki]:                      https://metacpan.org/pod/Silki
+[silki-repo]:                      http://git.urth.org/cgit.cgi/Silki.git
+[github-milki]:                    https://github.com/yongbin/milki
+[pg-citext]:                       http://www.postgresql.org/docs/9.1/static/citext.html
+[cpan-imagemagick]:                https://metacpan.org/pod/Image::Magick
+[github-cpanfile]:                 https://github.com/yongbin/Milki/blob/develop/cpanfile
+[github-schema]:                   https://github.com/yongbin/Milki/blob/develop/schema/Milki.sql
+[github-wiki-969]:                 https://github.com/yongbin/Milki/blob/develop/lib/Milki/Schema/Wiki.pm#L969
+[github-milki-schema]:             https://github.com/yongbin/Milki/tree/develop/lib/Milki/Schema
+[cpan-mx-classattrib]:             https://metacpan.org/pod/MooseX::ClassAttribute
+[github-test-pagerevision]:        https://github.com/yongbin/Milki/blob/develop/t/Milki/Schema/PageRevision.t
+[github-schema-pagerevision]:      https://github.com/yongbin/Milki/blob/develop/lib/Milki/Schema/PageRevision.pm
+[cpan-mx-parap]:                   https://metacpan.org/pod/MooseX::Role::Parameterized
+[github-mrs-datavalidator]:        https://github.com/yongbin/Milki/blob/develop/lib/Milki/Role/Schema/DataValidator.pm
+[github-mrs-systemlogger]:         https://github.com/yongbin/Milki/blob/develop/lib/Milki/Role/Schema/SystemLogger.pm
+[cpan-mx-parap-doc]:               https://metacpan.org/pod/distribution/MooseX-Role-Parameterized/lib/MooseX/Role/Parameterized/Tutorial.pod
+[mkdent-standard]:                 https://metacpan.org/pod/distribution/Markdent/lib/Markdent/Dialect/Standard.pod
+[mkdent-theory]:                   https://metacpan.org/pod/distribution/Markdent/lib/Markdent/Dialect/Theory.pod
+[mkdent-github]:                   https://metacpan.org/pod/distribution/Markdent/lib/Markdent/Dialect/GitHub.pod
+[github-mk-bp]:                    https://github.com/yongbin/Milki/blob/develop/lib/Milki/Markdent/Dialect/Milki/BlockParser.pm
+[github-mk-sp]:                    https://github.com/yongbin/Milki/blob/develop/lib/Milki/Markdent/Dialect/Milki/SpanParser.pm
+[github-mk-e-f]:                   https://github.com/yongbin/Milki/blob/develop/lib/Milki/Markdent/Event/FileLink.pm
+[github-mk-e-i]:                   https://github.com/yongbin/Milki/blob/develop/lib/Milki/Markdent/Event/ImageLink.pm
+[github-mk-e-wl]:                  https://github.com/yongbin/Milki/blob/develop/lib/Milki/Markdent/Event/WikiLink.pm
