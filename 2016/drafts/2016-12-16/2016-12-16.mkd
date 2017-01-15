@@ -1,0 +1,341 @@
+Title:    PDL 시작하기
+Package:  Seoul.pm
+Category: perl
+Category: Seoul.pm
+Author:   yongbin
+
+저자
+-----
+
+[@yongbin][twitter-yongbin] - Seoul.pm, 맞춤법 전문가, 나운이 아빠 yongbin.yu _at_ gmail.com
+
+
+시작하며
+---------
+
+올 한해 데이터 분석이라는 단어가 꽤 인기를 끌었습니다. '빅데이터' 같은
+모호한 단어때문에 다소 혼란스럽지만 적어도 다가올 미래에는 더 많은 장비를
+통해서 자료를 수집, 분석하고 그 결과를 바탕으로 의사결정에 활용하려고 하는
+사람이 증가할 것이라는 정도는 조심스럽게 예상해 볼 수 있는 큰 흐름이라고 생각합니다.
+
+데이터 분석을 하기위해 다양한 언어와 라이브러리가 존재합니다. 본질적으로 데이터
+분석에 제공되는 함수들은 복잡한 수치연산의 결과이므로 펄에서 효율적인 과학적 수치연산을
+위해 고안된 [PDL][cpan-pdl]을 이용하면 필요한 작업들을 훌륭하게 처리할 수 있습니다.
+저는 오늘과 내일 기사를 통해서 개인적으로 PDL을 공부하는 과정에서 알게된 내용들을 정리해서
+공유하고자 합니다.
+
+먼저 오늘은 [PDL::Threading][cpan-pdl-thread] 문서와 [PDL Book][pdl-book]의 내용을 중심으로
+PDL의 역사와 주요 특징을 알아보고 기존 프로그래밍 방식과 PDL의 방식의 차이를 비교하기 위해서
+[Conway의 생명게임][wiki-gol]의 코드를 비교해서 살펴 보도록 하겠습니다.
+
+준비물
+-------
+
+필요한 모듈은 다음과 같습니다.
+
+- [CPAN의 PDL모듈][cpan-pdl]
+
+직접 [CPAN][cpan]을 이용해서 설치한다면 다음 명령을 이용해서 모듈을 설치합니다.
+
+    #!bash
+    $ sudo cpan PDL
+
+사용자 계정으로 모듈을 설치하는 방법을 정확하게 알고 있거나
+[perlbrew][home-perlbrew]를 이용해서 자신만의 Perl을 사용하고 있다면
+다음 명령을 이용해서 모듈을 설치합니다.
+
+    #!bash
+    $ cpan PDL
+
+PDL의 역사와 특징
+-----------------
+
+PDL은 펄을 즐겨 사용하던 천체물리학자 [Karl Glazebrook][karl]가 일과의 업무로 처리하던 많은 양의
+우주 관측 영상이미지를 처리하는일을 효율적으로 하기 위한 목적으로 개발된 언어입니다.
+
+PDL은 [MATHLAB][mathlab], [GNU R][gnu-r], [GNU Octave][gnu-octave] 와 같은 과학적 수치연산용 언어처럼 배열 프로그래밍([Array Programming][wiki-apl])
+을 목적으로 만들어진 프로그래밍 언어입니다. 배열 프로그래밍은 우리가 일반적으로 사용하는
+프로그래밍과는 다르게 피연산자(operand)의 기본형이 단일값(scalar)가 아닌 N차원 배열을 주로 사용하는
+언어를 뜻합니다. 예를들면, 3 x 2 크기의  2차원 배열이 저장된 변수 `@a`와 `@b`를 더해서
+새로운 배열 `@c`를 만들려고 할때 일반적인 프로그래밍언어의 경우 다음과 같은 코드가 필요합니다.
+
+    #!perl
+    my @a = ( [ 1, 2, 3 ], [ 4,  5,  6 ] );
+    my @b = ( [ 7, 8, 9 ], [ 10, 11, 12 ] );
+    my @c;
+    for my $i ( 0 .. 1 ) {
+        for my $j ( 0 .. 2 ) {
+            $c[$i][$j] = $a[$i][$j] + $b[$i][$j];
+        }
+    }
+
+하지만 이 연산을 배열 프로그래밍 언어인 PDL에서는 다음과 같이 표현할 수 있습니다.
+
+    #!perl
+    my $a = pdl([[1,2,3],[4,5,6]]);
+    my $b = pdl([[7,8,9],[10,11,12]]);
+    my $c = $a + $b;
+
+`$a + $b` 라는 표현은 우리가 원하는 2차원 배열(행렬)의 합이라는 연산을 좀 더 직과적으로
+표현하고 내부 처리방식을 숨기기는 고 수준(high level)의 표현입니다. 따라서
+좀 더 수학적인 연산 자체를 표현하는데 집중할 수 있는 장점이 있습니다.
+
+스레딩(Threading)
+------------------
+
+앞서 살펴본 것 처럼 배열 프로그래밍의 특징은 묵시적인 반복(loop)을 통해 연산의
+표현력을 높히는 것을 알 수 있는데 PDL에서 이런 묵시적인 반복을 통한 처리방법을
+스레딩(threading) 이라고 부릅니다. 이 용어는 보통 우리가 사용하는 경량 프로세스로서의
+스레드와는 다른 독립적인 개념이기때문에 주의가 필요합니다.
+
+PDL의 스레딩은 단순하게 묵시적인 반복을 수행하는것 뿐만 아니라 우리가 어떤 함수가 필요할때
+함수의 인자가 될수 있는 행렬의 다양한 경우의 수를 고려할 필요없이 범용적으로 함수를
+작성하고 사용할 수 있도록 도와줍니다. 뿐만 아니라 스레딩은 PDL 성능의 핵심으로 내부적으로는
+CPU의 백터화된 연산자([SIDM][wiki-sidm] 확장) - 인텔의 MMX, SSE 혹은 AMD의 3DNow! 를 직접 사용할 수 있도록
+컴파일된 XS 코드와 직접 연결되어 병렬로 처리되기 때문에 빠릅니다.
+
+또한 기본으로 제공하는 [PDL::Ufunc][cpan-pdl-ufunc] 이외에 사용자가 직접 작성하는 코드역시
+PDL 전처리기 [PDL::PP][cpan-pdl-pp]에서 제공하는 `pp_def` 함수를 사용하면 스레딩에 적합(thread aware)
+하게 정의해서 앞서 언급합 이점을 얻을 수 있는 확장성도 갖추고 있습니다.
+
+따라서 PDL로 코드를 작성하는 경우 가능한 명시적인 `for`문과 `at`과 `index`와 같은 피들의
+[색인을 이용한 접근 함수를 이용하는것은 지양][stack-q1] 하고 스레드에서 제공하는 반복(thread loop)을
+통해 필요한 처리가 되도록 작성하는것이 중요합니다.
+
+간단하게 스레딩과 색인접근의 성능차이를 비교해 보면 다음과 같습니다.
+
+    #!perl
+    use Benchmark;
+    use PDL;
+
+    my $a = sequence(10,300);
+    timethese( 0, {
+            'Perl loops' => sub { my $pl = mymax($a)  },
+            'PDL thread' => sub { my $pt = mythreadmax($a) },
+        }
+    );
+
+    sub mymax {
+        # we only cover the case of 2D input
+        my ($pdl) = @_;
+        die "can only deal with 2D input" unless $pdl->getndims == 2;
+        my $result = $pdl->zeroes( $pdl->type, $pdl->getdim(1) );
+        my $tmp;
+        for ( my $i = 0 ; $i < $pdl->getdim(1) ; $i++ ) {
+            ( $tmp = $result->slice("($i)") ) .= $pdl->slice(",($i)")->max;
+        }
+        return $result;
+    }
+
+    sub mythreadmax {
+        my ($pdl) = @_;
+        return $pdl->maximum;
+    }
+
+제 장비에서 실행한 결과는 다음과 같이 600배 이상 차이가 나는것을 알 수 있습니다.
+
+    #!plain
+    Benchmark: running PDL thread, Perl loops for at least 3 CPU seconds...
+    PDL thread:  2 wallclock secs ( 3.17 usr +  0.01 sys =  3.18 CPU) @ 64548.74/s (n=205265)
+    Perl loops:  4 wallclock secs ( 3.18 usr +  0.01 sys =  3.19 CPU) @ 111.29/s (n=355)
+
+
+연결(Linking)
+-------------
+
+또 한가지 일반적인 펄 프로그램과 PDL 프로그램의 눈에 띄는 차이는 피들(piddle)의 연결성(linking)
+입니다.
+
+    #!perl
+    my $a = sequence(5,5);
+
+위와 같은 5 x 5 배열이 있을때 우리는 `slice` 함수를 이용해서 이 배열을 여러 조각으로 나눌 수 있습니다.
+
+    #!perl
+    my $line = $a->slice(':,(2)')       # 3번째 줄
+    my $even = $a->slice(':,1:-1:2')    # 짝수줄
+    my $area = $a->slice('3:4,3:1')     # 2 x 3 크기의 부행렬
+
+PDL에서 연결이란 실질적인 값을 가진 하나의 피들로 부터 생성된 하나 이상의 자식 피들은 실제로
+원본 피들의 값을 복사되는것이 아니라 아니라 일종의 참조 포인터가 저장되는것을 말합니다.
+따라서 부모 피들의 값이 변하면 참조하고 있는 자식 피들에도 반영이 되며, 마찬가지로
+전달 배정 연산자 `.=` 을 이용하면 자식 피들을 통해 부모 피들의 값을 수정할 수 있습니다.
+
+    #!perl
+    $a++                                # $line, $even, $area 의 값도 모두다 1씩 증가
+    $line .= zeros(5)                   # $a의 3번째 줄이 0으로 배정
+
+
+이제 살펴본 PDL의 특성들을 활용해서 어떻게 효율적으로 배열 프로그래밍을 할 수 있는지
+예제를 통해 살펴보겠습니다.
+
+생명 게임(GAME OF LIFE)
+------------------------
+
+[생명의 게임][wiki-gol]이란 1970년대 영국의 수학자 콘웨이가 고안한 일종의 오토마타로 매 시간마다
+일정한 규칙을 적용하는 격자위에 사용자가 임의의 시작 패턴을 부여하면 시작 패턴과
+게임규칙의 상요작용으로 인해 후속패턴의 형태가 결정되는 일종의 시뮬레이션 입니다.(참고로
+구글에서 'conway's game of life'를 [검색][google]하면 이스터에그로 화면에 우측에 데모를 볼 수 있습니다)
+
+게임의 규칙은 다음과 같습니다.
+
+1. 임의 크기의 격자위에 중앙 하나의 세포를 기준으로 3 x 3 크기의 범위 8개의 이웃세포가 존재.
+1. 전체 이웃 세포중 3개가 살아있다면 죽어있던 세포는 살아난다.
+1. 전체 이웃 세포중 2개 혹은 3개가 살아있다면 살아있던 세포는 계속 생존한다.
+1. 전체 이웃 세포중 1개가 살아있다면 살아있던 세포는 죽는다.
+
+사용자는 최초의 상태(패턴)만을 지정할 수 있고 그 뒤로는 규칙대로 진행과정을 지켜보면 됩니다.
+단순한 규칙이지만 상태패턴을 잘 고안하면 [다양한 패턴][gol-patt]을 만들 수 있을 뿐 아니라 심지어는
+간단한 [상수계산이 가능한 튜링머신을 상태패턴][gol-calc]을 고안한 사람도 있습니다.
+
+우리 목표는 이 생명 게임을 일반 펄코드와 PDL로 작성하는것입니다. 먼저 PDL로 작성한 코드를
+살펴보겠습니다.
+
+    #!perl
+    use PDL;
+    use PDL::NiceSlice;
+
+    my $a = zeroes( 20, 20 );
+
+    # Put in a simple glider.
+    $a ( 1 : 3, 1 : 3 ) .= pdl( [ 1, 1, 1 ],
+                                [ 0, 0, 1 ],
+                                [ 0, 1, 0 ] );
+
+    my $n;
+    for ( my $i = 0 ; $i < 100 ; $i++ ) {
+        # Calculate the number of neighbours per cell.
+        $n = $a->range( ndcoords($a) - 1, 3, "periodic" )->reorder( 2, 3, 0, 1 );
+        $n = $n->sumover->sumover - $a;
+
+        # Calculate the next generation.
+        $a = ( ( ( $n == 2 ) + ( $n == 3 ) ) * $a ) + ( ( $n == 3 ) * !$a );
+
+        print $a;
+    }
+
+간단하게 해석을 해보면 다음과 같습니다.
+
+- `$a` 변수에 20 x 20 격자를 만듭니다.
+- 화면을 이리저리 옮겨다니는 단순한 글라이더 패턴을 화면 좌측 상단에 배정합니다.
+- `range` 함수를 이용해 20 x 20 격자의 400개의 세포를 기준으로 3 x 3 영역을 잘라냅니다.
+- `range` 함수는 첫번째 인자로 영역의 색인, 두번째 인자로 영역의 크기, 세번째 인자로 경계 동작을 정의합니다.
+- `periodic` 동작의 경우 격자의 경계를 만났을때 반대편으로 연결합니다.
+- `ndcoords` 함수는 행렬의 좌표를 돌려줍니다. 우리의 경우 0,0에서 시작할때 중심점이 1,1이 되기 때문에 모든 x,y 좌표에서 1을 빼서 이를 보정합니다.
+- `range` 함수의 기본 결과는 20 x 20 격자가 3 x 3 개 존재합니다.
+- `reorder` 함수를 사용해서 이 결과를 좀 더 사람이 이해하기 쉬운 3 x 3 격자가 20 x 20 개 존재하도록 합니다.
+- `$n`에 해당 영역에 생존한 세포의 수를 계산합니다.( 3 x 3 전체 세포수 - 중심점의 세포수)
+- 생존한 세포수 `$n` 을 기준으로 게임의 규칙을 적용해서 다음 상태를 만듭니다.
+
+요약하면 전체 영역을 연결된 임의의 작은 영역으로 나눈뒤, 영역에서 생존수를 기준으로 다음상태를 계산하는
+과정이 비교적 간결하게 잘 표현되어있습니다. 이 코드에서는 게임의 진행하기위한 과정에 해당하는 명시적인
+반복이외에 특별한 순회 없이 반복(thread loop)을 활용해서 연산 처리했으며, 좌표를 이용해
+큰 격자를 하부격자로 나눈뒤 연결된 값을 이용해서 문제를 간결하게 만들었습니다.
+
+스레드 반복과 연결을 활용한 간결성은 기존 방식으로 작성한 아래코드와 비교해보면 더욱 잘 확인할 수 있습니다.
+
+    #!perl
+    use PDL;
+    use PDL::NiceSlice;
+
+    # Make a board for the game of life.
+    my $nx = 20;
+    my $ny = 20;
+
+    # Current generation.
+    my $a = zeroes( $nx, $ny );
+
+    # Next generation.
+    my $n = zeroes( $nx, $ny );
+
+    # Put in a simple glider.
+    $a ( 1 : 3, 1 : 3 ) .= pdl( [ 1, 1, 1 ], [ 0, 0, 1 ], [ 0, 1, 0 ] );
+
+    for ( my $i = 0 ; $i < 100 ; $i++ ) {
+        $n = zeroes( $nx, $ny );
+        $new_a = $a->copy;
+        for ( $x = 0 ; $x < $nx ; $x++ ) {
+            for ( $y = 0 ; $y < $ny ; $y++ ) {
+
+                # For each cell, look at the surrounding neighbours.
+                for ( $dx = -1 ; $dx <= 1 ; $dx++ ) {
+                    for ( $dy = -1 ; $dy <= 1 ; $dy++ ) {
+                        $px = $x + $dx;
+                        $py = $y + $dy;
+
+                        # Wrap around at the edges.
+                        if ( $px < 0 )    { $px = $nx - 1 }
+                        if ( $py < 0 )    { $py = $ny - 1 }
+                        if ( $px >= $nx ) { $px = 0 }
+                        if ( $py >= $ny ) { $py = 0 }
+
+                        $n ( $x, $y ) .= $n ( $x, $y ) + $a ( $px, $py );
+                    }
+                }
+
+                # Do not count the central cell itself.
+                $n ( $x, $y ) -= $a ( $x, $y );
+
+                # Work out if cell lives or dies:
+                #   Dead cell lives if n = 3
+                #   Live cell dies if n is not 2 or 3
+                if ( $a ( $x, $y ) == 1 ) {
+                    if ( $n ( $x, $y ) < 2 ) { $new_a ( $x, $y ) .= 0 }
+                    if ( $n ( $x, $y ) > 3 ) { $new_a ( $x, $y ) .= 0 }
+                }
+                else {
+                    if ( $n ( $x, $y ) == 3 ) { $new_a ( $x, $y ) .= 1 }
+                }
+            }
+        }
+
+        print $a;
+
+        $a = $new_a;
+    }
+
+세세하게 살펴보지는 않겠지만, 순회하는 격자를 생성하기 위해 추가적으로 4개의 반복문이
+호출되었고 연결된 영역의 배정과 경계좌표 처리를 위해서 추가적인 코드가 더 필요했음을
+알 수 있습니다. [PDL::Threading][cpan-pdl-thread] 문서에 따르면 처리 속도역시 큰 차이가
+나고 있습니다.
+
+    #!plain
+    Classical => 32.79 seconds.
+    Threaded  =>  0.41 seconds.
+
+정리하며
+--------
+
+처음 PDL을 접했을때 저는 단순하게 수학적인 함수들을 모아둔 라이브러리로 생각했습니다.
+그래서 기존 방식으로 반복문과 `at`과 같은 함수들을 사용해서 문제를 처리해 오다가 관련된
+문서와 다른 사람들이 작성한 코드를 읽고 PDL로 좋은 프로그램을 작성하기 위해서는 필수적으로
+스레딩이나 연결과 같은 개념을 숙지해야한다는 사실을 알게 되었습니다.
+
+우리가 객체지향 프로그래밍 방식으로 프로그램을 작성한다면 객체지향의 관점에서 문제를
+바라보는것 처럼 배열 프로그래밍 방식으로 코드를 작성하기 위해서는 배열 프로그래밍의 관점을
+이해하고 그 방식으로 문제를 바라볼 필요가 있습니다. 아무쪼록 이 기사가 배열 프로그래밍과
+PDL을 시작하는데 작은 보탬이 되었으면 하는 바람입니다.
+
+내일은 PDL을 이용해서 간단한 예측을 위한 확률계산을 진행해 보도록 하겠습니다.
+
+_EOT_
+
+[cpan-pdl]:                     https://metacpan.org/pod/PDL
+[cpan-pdl-thread]:              https://metacpan.org/pod/distribution/PDL/Basic/Pod/Threading.pod
+[cpan-pdl-ufunc]:               https://metacpan.org/pod/PDL::Ufunc
+[cpan-pdl-pp]:                  https://metacpan.org/pod/PDL::PP
+[pdl-book]:                     http://pdl.perl.org/content/pdl-book-toc.html
+[cpan]:                         http://www.cpan.org
+[home-perlbrew]:                http://perlbrew.pl
+[twitter-yongbin]:              http://twitter.com/#!/y0ngbin
+[wiki-apl]:                     https://en.wikipedia.org/wiki/Array_programming
+[wiki-sidm]:                    https://en.wikipedia.org/wiki/SIMD
+[wiki-gol]:                     https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life
+[karl]:                         http://astronomy.swin.edu.au/~karl/Karl-Home/Home.html
+[mathlab]:                      https://en.wikipedia.org/wiki/MATLAB
+[gnu-r]:                        https://www.r-project.org/
+[gnu-octave]:                   https://www.gnu.org/software/octave/
+[stack-q1]:                     http://stackoverflow.com/questions/8595244/pdl-pairwise-row-comparison
+[google]:                       https://www.google.co.kr/search?q=conway%27s+game+of+life&oq=conway%27s+game+of+life
+[gol-patt]:                     https://www.youtube.com/watch?time_continue=6&v=xP5-iIeKXE8
+[gol-calc]:                     http://pentadecathlon.com/lifeNews/2011/01/phi_and_pi_calculators.html
